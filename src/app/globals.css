@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-stone-50 text-stone-900 antialiased;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button, select, summary {
+    @apply focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-teal-700;
+  }
+}
