@@ -2,27 +2,27 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/button";
+import { PhotoPicker } from "@/components/photo-picker";
 import { DieFace } from "@/components/die-face";
 import { Disclosure } from "@/components/disclosure";
 import { AnalysisDetails } from "@/components/analysis-details";
 import { FACE_VALUES, isFaceValue } from "@/lib/dice";
 import { resolvedDice, REVIEW_THRESHOLD, type CropDecision, type DraftDie, type AnalysisResponse, type AnalysisResult } from "@/lib/recognition";
 import { SCORING_RULES, scoreRoll } from "@/lib/scoring";
-import { ACCEPTED_IMAGE_TYPES, validateImage } from "@/lib/upload";
+import { validateImage, validatePhotoSelection } from "@/lib/upload";
 import { resizeImageForUpload } from "@/lib/resize-upload";
 import { cn } from "@/lib/utils";
 
 type Photo = { file: File; url: string };
 
 export default function Playground() {
-  const inputRef = useRef<HTMLInputElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [dice, setDice] = useState<DraftDie[]>([]);
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
-  const [uploadInfo, setUploadInfo] = useState<{ size: number; width: number; height: number } | null>(null);
+  const [uploadInfo, setUploadInfo] = useState<{ size: number; width: number; height: number; resized: boolean } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [edited, setEdited] = useState(false);
@@ -50,7 +50,7 @@ export default function Playground() {
     setEdited(false);
     setManualConfirmed(false);
     setDragging(false);
-    const validationError = validateImage(file, { checkSize: false });
+    const validationError = validatePhotoSelection(file);
     setError(validationError);
     setPhoto(validationError ? null : { file, url: URL.createObjectURL(file) });
   }
@@ -79,7 +79,7 @@ export default function Playground() {
       }
       photoPrepared = true;
       setPreparing(false);
-      if (prepared.resized) setUploadInfo({ size: prepared.file.size, width: prepared.width, height: prepared.height });
+      if (prepared.resized || prepared.converted) setUploadInfo({ size: prepared.file.size, width: prepared.width, height: prepared.height, resized: prepared.resized });
       const form = new FormData();
       form.set("image", prepared.file);
       const response = await fetch("/api/analyze", { method: "POST", body: form, signal: controller.signal });
@@ -94,7 +94,7 @@ export default function Playground() {
     } catch {
       if (!controller.signal.aborted) setError(photoPrepared
         ? "The request couldn't finish. Check your connection and try again."
-        : "This photo couldn't be prepared for upload. Choose another JPEG, PNG, or WebP image.");
+        : "This browser couldn't prepare the photo. Try taking a new photo or choosing a JPEG, PNG, or WebP image.");
     } finally {
       if (activeRequest.current === controller) {
         activeRequest.current = null;
@@ -135,12 +135,6 @@ export default function Playground() {
             <h2 id="photo-heading" className="font-semibold">Your roll</h2>
           </div>
           <div className="p-5 sm:p-6">
-            <input ref={inputRef} type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} className="sr-only" tabIndex={-1} aria-label="Upload a dice photo"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                if (file) choosePhoto(file);
-                event.currentTarget.value = "";
-              }} />
             <div
               onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
@@ -150,7 +144,7 @@ export default function Playground() {
                 const file = event.dataTransfer.files[0];
                 if (file) choosePhoto(file);
               }}
-              className={cn("relative flex aspect-4/3 items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed", dragging ? "border-teal-700 bg-teal-50" : "border-stone-200 bg-stone-50")}
+              className={cn("relative flex items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed", photo ? "aspect-4/3" : "min-h-80", dragging ? "border-teal-700 bg-teal-50" : "border-stone-200 bg-stone-50")}
             >
               {photo ? <img src={photo.url} alt="Your uploaded dice roll" className="size-full object-contain"
                 onError={() => {
@@ -162,14 +156,13 @@ export default function Playground() {
                   setPhoto(null);
                   setAnalysis(null);
                   setDice([]);
-                  setError("This photo couldn't be opened. Choose another JPEG, PNG, or WebP image.");
+                  setError("This browser couldn't open the photo. Try taking a new photo or choosing a JPEG, PNG, or WebP image.");
                 }} />
                 : <div className="px-6 py-8 text-center">
                   <div aria-hidden="true" className="mb-6 flex justify-center gap-3 text-stone-500"><DieFace value={1} /><DieFace value={5} /><DieFace value={3} /></div>
                   <h3 className="text-lg font-semibold">Start with a dice photo</h3>
-                  <p className="mx-auto mb-5 mt-2 max-w-xs text-sm leading-6 text-stone-500">Drop it here, or choose a photo from your device.</p>
-                  <Button variant="secondary" onClick={() => inputRef.current?.click()}>Choose photo</Button>
-                  <p className="mt-4 text-xs text-stone-500">JPEG, PNG, or WebP · Large photos resize automatically</p>
+                  <p className="mx-auto mb-5 mt-2 max-w-xs text-sm leading-6 text-stone-500">Take a photo, choose one from your device, or drop it here.</p>
+                  <p className="mt-4 text-xs leading-5 text-stone-500">JPEG, PNG, WebP, or HEIC · Large photos resize automatically</p>
                 </div>}
               {analysis && <svg aria-label="Detected dice locations" role="img" viewBox={`0 0 ${analysis.segmentation.width} ${analysis.segmentation.height}`} className="pointer-events-none absolute inset-0 size-full">
                 {dice.map((die, index) => {
@@ -186,14 +179,18 @@ export default function Playground() {
               </svg>}
             </div>
 
-            {photo && <div className="mt-3 flex items-center justify-between gap-3">
+            {photo && <div className="mt-3 space-y-3">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{photo.file.name}</p>
                 <p className="mt-0.5 text-xs tabular-nums text-stone-500">{Math.max(1, Math.round(photo.file.size / 1024)).toLocaleString("en-US")} KB</p>
-                {uploadInfo && <p className="mt-1 text-xs leading-5 tabular-nums text-teal-800">Resized for upload: {uploadInfo.width.toLocaleString("en-US")} × {uploadInfo.height.toLocaleString("en-US")} · {Math.max(1, Math.round(uploadInfo.size / 1024)).toLocaleString("en-US")} KB</p>}
+                {uploadInfo && <p className="mt-1 text-xs leading-5 tabular-nums text-teal-800">{uploadInfo.resized ? "Resized" : "Converted to JPEG"} for upload: {uploadInfo.width.toLocaleString("en-US")} × {uploadInfo.height.toLocaleString("en-US")} · {Math.max(1, Math.round(uploadInfo.size / 1024)).toLocaleString("en-US")} KB</p>}
               </div>
-              <Button variant="quiet" onClick={() => inputRef.current?.click()}>Change photo</Button>
             </div>}
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <PhotoPicker onSelect={choosePhoto}>{photo ? "Change photo" : "Choose photo"}</PhotoPicker>
+              <PhotoPicker camera onSelect={choosePhoto}>{photo ? "Retake photo" : "Take photo"}</PhotoPicker>
+            </div>
 
             <p className="my-5 text-sm leading-6 text-stone-500">For a clear read, include 1–6 dice with their top faces visible. Keep dice from earlier rolls out of the photo.</p>
             {error && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-800">{error}</p>}

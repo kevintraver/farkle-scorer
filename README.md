@@ -1,6 +1,6 @@
 # Farkle photo playground
 
-Upload a photo of 1–6 regular dice, inspect the segmented crops and recognized faces, and calculate the highest Farkle score for that roll. Dice values are editable and corrections rescore immediately. Colors have no effect.
+Take or choose a photo of 1–6 regular dice, inspect the segmented crops and recognized faces, and calculate the highest Farkle score for that roll. Dice values are editable and corrections rescore immediately. Colors have no effect.
 
 ## Run locally
 
@@ -27,11 +27,15 @@ pnpm dev
 
 Open <http://localhost:3000>. Restart the app after changing environment variables. If you run the project through d3k, use that existing dev server and `d3k errors --context` for diagnostics instead of starting another server.
 
+For phone testing on the same network, open the computer's LAN address with port 3000. The development configuration permits `192.168.*.*` and `*.local` origins; add your LAN hostname or IP to `allowedDevOrigins` in `next.config.ts` if it uses a different range.
+
 ## How recognition works
 
-`POST /api/analyze` accepts a multipart field named `image` (JPEG, PNG, or WebP, up to 10 MiB after browser resizing). You can select larger original photos; the browser reduces them before sending.
+Use **Choose photo** to open the device's native photo picker, or **Take photo** to request its rear camera on supported mobile browsers. Both controls use labels associated with native file inputs. After selecting a photo, **Change photo** and **Retake photo** remain available. Safari 17+ can also decode HEIC/HEIF library photos; the app converts those to JPEG before upload. Browsers that cannot decode a selected photo show an error.
 
-1. Before upload, the browser resizes photos wider or taller than 2,048 pixels, or files over 10 MiB, to fit within 2,048 × 2,048 without upscaling. It preserves proportions and EXIF orientation, flattens transparency onto white, and encodes resized photos as JPEG at 90% quality. Smaller photos pass through unchanged. The preview keeps the original photo, and the upload size and dimensions appear when resizing occurs.
+`POST /api/analyze` accepts a multipart field named `image` (JPEG, PNG, or WebP, up to 10 MiB after browser preparation). You can select larger original photos; the browser reduces them before sending. HEIC/HEIF is accepted by the picker for browser conversion, not by the server.
+
+1. Before upload, the browser decodes the photo using an image element, preserving EXIF orientation. Photos wider or taller than 2,048 pixels, or files over 10 MiB, are resized to fit within 2,048 × 2,048 without upscaling. Resized photos and HEIC/HEIF photos are flattened onto white and encoded as JPEG at 90% quality. Smaller JPEG, PNG, and WebP photos pass through unchanged. The preview keeps the original photo, and the upload size and dimensions appear after resizing or conversion.
 2. The server also normalizes orientation, strips metadata, flattens transparency, and enforces the 2,048-pixel limit before segmentation.
 3. The normalized photo goes to [Meta SAM 3.1](https://dev.meta.ai/docs/sam/overview) at `https://api.meta.ai/v1/responses`, with the exact text prompt **`dice`** and `metadata.mask_encoding: "one_bit"`.
 4. The official [Meta parser](https://dev.meta.ai/docs/sam/client-libraries) decodes the streamed object masks. Each mask isolates one die: pixels outside it become white, then the object is cropped, padded, and limited to 512 pixels. The server uses the mask's half-open bounds from the parser.

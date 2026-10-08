@@ -1,17 +1,22 @@
-import { MAX_IMAGE_BYTES, MAX_IMAGE_EDGE } from "./upload";
+import { ACCEPTED_IMAGE_TYPES, MAX_IMAGE_BYTES, MAX_IMAGE_EDGE } from "./upload";
 
-/** Decode with EXIF orientation, and resize only photos that exceed upload limits. */
+/** Use the browser's image decoder (including Safari HEIC support) before JPEG conversion/resizing. */
 export async function resizeImageForUpload(file: File) {
-  const image = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const url = URL.createObjectURL(file);
+  const image = new Image();
   try {
-    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(image.width, image.height));
-    if (scale === 1 && file.size <= MAX_IMAGE_BYTES) {
-      return { file, width: image.width, height: image.height, resized: false };
+    image.src = url;
+    await image.decode();
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
+    const converted = !ACCEPTED_IMAGE_TYPES.includes(file.type);
+    const resized = scale < 1 || file.size > MAX_IMAGE_BYTES;
+    if (!resized && !converted) {
+      return { file, width: image.naturalWidth, height: image.naturalHeight, resized, converted };
     }
 
     const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(image.width * scale));
-    canvas.height = Math.max(1, Math.round(image.height * scale));
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Image resizing is unavailable in this browser.");
     context.fillStyle = "#ffffff";
@@ -24,9 +29,9 @@ export async function resizeImageForUpload(file: File) {
     });
     return {
       file: new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg", lastModified: file.lastModified }),
-      width: canvas.width, height: canvas.height, resized: true,
+      width: canvas.width, height: canvas.height, resized, converted,
     };
   } finally {
-    image.close();
+    URL.revokeObjectURL(url);
   }
 }

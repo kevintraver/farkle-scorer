@@ -16,7 +16,12 @@ describe("photo playground", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 800, height: 600, close: vi.fn() })));
+    vi.stubGlobal("Image", class {
+      naturalWidth = 800;
+      naturalHeight = 600;
+      src = "";
+      decode = vi.fn(async () => {});
+    });
     class TestURL extends URL {
       static createObjectURL = vi.fn(() => "blob:test-photo");
       static revokeObjectURL = revokeUrl;
@@ -66,6 +71,31 @@ describe("photo playground", () => {
     expect(screen.queryByText("Farkle", { exact: true })).toBeNull();
   });
 
+  it("accepts a camera photo and keeps the current roll when the picker is canceled", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json(analysisFor()));
+    render(<Playground />);
+    const camera = screen.getByLabelText("Take a dice photo");
+    expect(camera.getAttribute("accept")).toBe("image/*");
+    expect(camera.getAttribute("capture")).toBe("environment");
+    expect(screen.getByLabelText("Upload a dice photo").hasAttribute("capture")).toBe(false);
+    fireEvent.change(camera, { target: { files: [new File(["photo"], "camera.jpg", { type: "image/jpeg" })] } });
+    expect(screen.getByText("camera.jpg")).toBeTruthy();
+    expect(screen.getByLabelText("Take a dice photo")).toBe(camera);
+    fireEvent.click(screen.getByRole("button", { name: "Analyze roll" }));
+    await screen.findByLabelText("Roll score: 350 points");
+    fireEvent.change(screen.getByLabelText("Take a dice photo"), { target: { files: [] } });
+    expect(screen.getByLabelText("Roll score: 350 points")).toBeTruthy();
+    expect(screen.getByText("camera.jpg")).toBeTruthy();
+  });
+
+  it("accepts HEIC photos from the iOS library for browser conversion", () => {
+    render(<Playground />);
+    choosePhoto("IMG_1234.HEIC", "image/heic");
+    expect(screen.getByText("IMG_1234.HEIC")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Analyze roll" }).hasAttribute("disabled")).toBe(false);
+  });
+
   it("keeps unreadable crops visible and waits for their correction", async () => {
     fetchMock.mockResolvedValueOnce(Response.json(analysisFor([5, "unclear"])));
     render(<Playground />);
@@ -111,7 +141,7 @@ describe("photo playground", () => {
   it("shows upload and API errors next to the action", async () => {
     render(<Playground />);
     choosePhoto("bad.txt", "text/plain");
-    expect(screen.getByRole("alert").textContent).toContain("JPEG, PNG, or WebP");
+    expect(screen.getByRole("alert").textContent).toContain("JPEG, PNG, WebP, or HEIC");
     expect(fetchMock).not.toHaveBeenCalled();
     choosePhoto();
     fetchMock.mockResolvedValueOnce(Response.json({ ok: false, error: "Check your API quota." }, { status: 429 }));

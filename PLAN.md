@@ -2,7 +2,7 @@
 
 ## Agreed behavior
 
-- Upload a JPEG, PNG, or WebP photo of one roll containing 1–6 dice. Before upload, resize photos exceeding 2,048 pixels on either edge or 10 MiB, preserving proportions and orientation. Leave smaller photos unchanged and show the resized dimensions and upload size.
+- Choose a photo or take one with the rear camera through native file inputs, including on iOS Safari. Support JPEG, PNG, WebP, and browser-decodable HEIC/HEIF photos of one roll containing 1–6 dice. Convert HEIC/HEIF to JPEG before upload; resize photos exceeding 2,048 pixels on either edge or 10 MiB, preserving proportions and orientation. Leave smaller JPEG/PNG/WebP photos unchanged and show the prepared dimensions and upload size.
 - Normalize the photo and send it to Meta SAM 3.1 with the prompt `dice`. Decode the masks with Meta’s official parser, isolate each die on white, and generate padded crops.
 - Send two images per die in each OpenAI Decisions (`gpt-6-luna`) request: the isolated die and a wider original-photo crop with the target outlined in cyan. Expand the context by half the die’s longest dimension on each side, clamp to the photo, and limit it to 768 pixels. Ask one top-face question: 1–6, unclear, or not_a_die. Use the surroundings to interpret orientation; ignore neighboring dice, colors, and side-face pips.
 - Show numbered locations, masked crops, and editable face values. Allow adding missed dice and removing false detections. Keep unreadable crops visible with an unset value.
