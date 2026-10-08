@@ -3,10 +3,12 @@ import { analysisFor, decisionFor, segmentationFor } from "@/test/fixtures";
 import { buildDecisionRequest, decisionResponseSchema, parseRecognition, resolvedDice } from "./recognition";
 
 describe("per-crop recognition", () => {
-  it("sends one cropped image with a single top-face question", () => {
-    const request = buildDecisionRequest("data:image/png;base64,crop");
+  it("sends the isolated die followed by its context with a single top-face question", () => {
+    const request = buildDecisionRequest({ imageUrl: "data:image/png;base64,crop", contextImageUrl: "data:image/png;base64,context" });
     expect(request.model).toBe("gpt-6-luna");
+    expect(request.input[0].content).toHaveLength(3);
     expect(request.input[0].content[1]).toMatchObject({ type: "input_image", image_url: "data:image/png;base64,crop" });
+    expect(request.input[0].content[2]).toMatchObject({ type: "input_image", image_url: "data:image/png;base64,context" });
     expect(request.questions).toHaveLength(1);
     expect(request.questions[0].choices.map((choice) => choice.value)).toEqual(["1", "2", "3", "4", "5", "6", "unclear", "not_a_die"]);
   });

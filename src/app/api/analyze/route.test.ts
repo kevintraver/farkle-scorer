@@ -25,7 +25,7 @@ describe("POST /api/analyze", () => {
     for (const value of values) fetchMock.mockResolvedValueOnce(Response.json(decisionFor(value)));
   }
 
-  it("calls Meta first, then sends only individual masked crops to Decisions", async () => {
+  it("calls Meta first, then pairs each isolated die with its own context in Decisions", async () => {
     mockRoll([2, 2, 2, 1, 5, 6]);
     const response = await POST(await upload());
     expect(response.status).toBe(200);
@@ -44,8 +44,12 @@ describe("POST /api/analyze", () => {
       const request = JSON.parse(String(decisionOptions?.body));
       expect(request.questions).toHaveLength(1);
       expect(request.questions[0].name).toBe("top_face");
+      expect(request.input[0].content).toHaveLength(3);
       expect(request.input[0].content[1].image_url).toBe(body.segmentation.crops[index].imageUrl);
       expect(request.input[0].content[1].image_url).not.toBe(metaRequest.input[0].content[1].image_url);
+      expect(request.input[0].content[2].image_url).toBe(body.segmentation.crops[index].contextImageUrl);
+      expect(request.input[0].content[2].image_url).not.toBe(request.input[0].content[1].image_url);
+      expect(request.input[0].content[2].image_url).not.toBe(metaRequest.input[0].content[1].image_url);
     }
   });
 

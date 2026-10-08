@@ -19,6 +19,7 @@ export function segmentationFor(count = 6): Segmentation {
     model: SAM_MODEL, prompt: SAM_PROMPT, width: 512, height: 128, detectedCount: count,
     crops: count > 6 ? [] : Array.from({ length: count }, (_, index) => ({
       id: `sam-${index}`, objectId: String(index), imageUrl: `data:image/png;base64,crop${index}`,
+      contextImageUrl: `data:image/png;base64,context${index}`,
       bounds: { left: index * 70, top: 10, right: index * 70 + 60, bottom: 37 },
     })),
     warnings: [], elapsedMs: 500,

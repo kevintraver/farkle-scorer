@@ -5,6 +5,7 @@ export type DiceCrop = {
   id: string;
   objectId: string;
   imageUrl: string;
+  contextImageUrl: string;
   bounds: { left: number; top: number; right: number; bottom: number };
 };
 

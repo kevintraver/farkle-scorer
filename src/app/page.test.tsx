@@ -41,6 +41,12 @@ describe("photo playground", () => {
     expect(screen.getByText("gpt-6-luna")).toBeTruthy();
     expect(screen.getByText("sam-3.1")).toBeTruthy();
     expect(screen.getAllByAltText(/Segmented crop for die/)).toHaveLength(6);
+    fireEvent.click(screen.getByRole("button", { name: "Images sent to Decisions" }));
+    expect(screen.getAllByAltText(/Isolated image sent for die/)).toHaveLength(6);
+    expect(screen.getAllByAltText(/Context image sent for die/)).toHaveLength(6);
+    expect(screen.getByAltText("Context image sent for die 1").getAttribute("src")).toBe("data:image/png;base64,context0");
+    fireEvent.click(screen.getByRole("button", { name: "Response JSON" }));
+    expect(screen.getByText(/"segmentation":/, { selector: "pre" }).textContent).not.toContain("data:image/png");
   });
 
   it("requires completing manual dice entry before scoring an unreadable photo", async () => {

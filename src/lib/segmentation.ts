@@ -53,7 +53,31 @@ export async function createDiceCrop(image: Awaited<ReturnType<typeof prepareIma
     .extend({ top: padding, bottom: padding, left: padding, right: padding, background: "#ffffff" })
     .resize({ width: 512, height: 512, fit: "inside", withoutEnlargement: true })
     .png().toBuffer();
-  return { id: `sam-${record.objectId}`, objectId: record.objectId, bounds: record.bounds, imageUrl: `data:image/png;base64,${crop.toString("base64")}` };
+
+  // Preserve the table, shadows, and nearby objects as orientation cues.
+  const contextPadding = Math.round(Math.max(width, height) * 0.5);
+  const contextLeft = Math.max(0, left - contextPadding);
+  const contextTop = Math.max(0, top - contextPadding);
+  const contextWidth = Math.min(image.width, right + contextPadding) - contextLeft;
+  const contextHeight = Math.min(image.height, bottom + contextPadding) - contextTop;
+  const strokeWidth = Math.max(2, Math.round(Math.max(contextWidth, contextHeight) / 256));
+  const boxLeft = Math.max(strokeWidth / 2, left - contextLeft - strokeWidth);
+  const boxTop = Math.max(strokeWidth / 2, top - contextTop - strokeWidth);
+  const boxRight = Math.min(contextWidth - strokeWidth / 2, right - contextLeft + strokeWidth);
+  const boxBottom = Math.min(contextHeight - strokeWidth / 2, bottom - contextTop + strokeWidth);
+  const outline = Buffer.from(`<svg width="${contextWidth}" height="${contextHeight}" xmlns="http://www.w3.org/2000/svg"><rect x="${boxLeft}" y="${boxTop}" width="${boxRight - boxLeft}" height="${boxBottom - boxTop}" fill="none" stroke="#06b6d4" stroke-width="${strokeWidth}"/></svg>`);
+  const context = await sharp(image.data)
+    .extract({ left: contextLeft, top: contextTop, width: contextWidth, height: contextHeight })
+    .composite([{ input: outline }])
+    .png().toBuffer();
+  const resizedContext = await sharp(context)
+    .resize({ width: 768, height: 768, fit: "inside", withoutEnlargement: true })
+    .png().toBuffer();
+  return {
+    id: `sam-${record.objectId}`, objectId: record.objectId, bounds: record.bounds,
+    imageUrl: `data:image/png;base64,${crop.toString("base64")}`,
+    contextImageUrl: `data:image/png;base64,${resizedContext.toString("base64")}`,
+  };
 }
 
 export async function cropsFromSegmentation(image: Awaited<ReturnType<typeof prepareImage>>, result: ImageSegmentationResult) {

@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   // At most six independent calls. Retain every crop even if one reader fails.
   const decisions = await Promise.all(segmentation.crops.map(async (crop): Promise<CropDecision> => {
     try {
-      const raw = await client.decisions.create(buildDecisionRequest(crop.imageUrl), { signal: request.signal });
+      const raw = await client.decisions.create(buildDecisionRequest(crop), { signal: request.signal });
       const parsed = decisionResponseSchema.safeParse(raw);
       return parsed.success ? { id: crop.id, response: parsed.data } : { id: crop.id, response: null, error: "OpenAI returned an unexpected answer. Enter this die's value." };
     } catch (error) {

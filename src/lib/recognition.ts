@@ -1,19 +1,23 @@
 import { z } from "zod";
 import { FACE_VALUES, isFaceValue, type Die, type FaceValue } from "./dice";
 import type { RollScore } from "./scoring";
-import type { Segmentation } from "./segmentation-types";
+import type { DiceCrop, Segmentation } from "./segmentation-types";
 
 export const MODEL = "gpt-6-luna";
 export const REVIEW_THRESHOLD = 0.8;
 
-export const IMAGE_INSTRUCTIONS = `Inspect this cropped, segmented object from a photograph of a dice roll.
-The area outside its segmentation mask has been replaced with white.
+export const IMAGE_INSTRUCTIONS = `Inspect two images of the same target object from a photograph of a dice roll.
+Image 1 isolates the target object; the area outside its segmentation mask is white.
+Image 2 shows a wider, unmasked crop of the original photo. A cyan rectangle marks the target object's location. The surrounding surface, shadows, and neighboring objects provide orientation context.
+Both images preserve the original photo's orientation.
 
-Read only the upward-facing top face of one physical six-sided die with pip markings.
+Use Image 1 to identify the target die and both views to determine its upward-facing top face and read its pips.
+- The top face points away from the surface the die rests on. It is not necessarily the largest visible face or the face highest in the image.
 - Count pips on the top face, not on side faces.
-- Ignore all pip and die colors.
+- Ignore neighboring dice in Image 2. Read only the target identified by Image 1 and the cyan rectangle.
+- Ignore all pip and die colors when determining the value; the cyan rectangle is only a locator.
 - Do not infer a hidden or unreadable top face from side faces or opposite-face conventions.
-- Choose "unclear" if the top face is cropped, occluded, ambiguous, or if the crop contains multiple dice.
+- Choose "unclear" if the top face cannot be read from either view, the target is ambiguous, or Image 1 contains multiple dice. Neighboring dice in Image 2 alone do not make the answer unclear.
 - Choose "not_a_die" if this object is not a six-sided pip die.
 - Do not calculate a game score.`;
 
@@ -23,7 +27,7 @@ export const QUESTIONS = [{
   instructions: "What number is on the upward-facing top face of this die?",
   choices: [
     ...FACE_VALUES.map((value) => ({ value: String(value), description: `The top face shows ${value} ${value === 1 ? "pip" : "pips"}.` })),
-    { value: "unclear", description: "The top-face value cannot be read reliably, or multiple dice are present." },
+    { value: "unclear", description: "The target's top-face value cannot be read reliably, the target is ambiguous, or the isolated image contains multiple dice." },
     { value: "not_a_die", description: "The segmented object is not a six-sided pip die." },
   ],
 }];
@@ -58,12 +62,13 @@ export type AnalysisResult = {
 };
 export type AnalysisResponse = AnalysisResult | { ok: false; error: string };
 
-export function buildDecisionRequest(imageDataUrl: string) {
+export function buildDecisionRequest(crop: Pick<DiceCrop, "imageUrl" | "contextImageUrl">) {
   return {
     model: MODEL,
     input: [{ role: "user" as const, content: [
       { type: "input_text" as const, text: IMAGE_INSTRUCTIONS },
-      { type: "input_image" as const, image_url: imageDataUrl, detail: "high" as const },
+      { type: "input_image" as const, image_url: crop.imageUrl, detail: "high" as const },
+      { type: "input_image" as const, image_url: crop.contextImageUrl, detail: "high" as const },
     ] }],
     questions: QUESTIONS,
   };

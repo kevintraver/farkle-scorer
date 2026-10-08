@@ -18,7 +18,7 @@ export function AnalysisDetails({ analysis }: { analysis: AnalysisResult }) {
       <div><span className="text-stone-500">Decisions input tokens </span><span className="font-medium">{usage.input.toLocaleString("en-US")}</span></div>
       <div><span className="text-stone-500">Decisions total tokens </span><span className="font-medium">{usage.total.toLocaleString("en-US")}</span></div>
     </div>
-    <p className="mb-4 text-sm leading-6 text-stone-500">One SAM request, followed by {diagnostics.decisions.length} individual crop requests. These are the original answers; edits do not change them. Confidence is a model estimate, not verified accuracy. Token totals include successful Decisions responses only.</p>
+    <p className="mb-4 text-sm leading-6 text-stone-500">One SAM request, followed by {diagnostics.decisions.length} Decisions requests. Each request includes an isolated die and a wider view with the target outlined in cyan. These are the original answers; edits do not change them. Confidence is a model estimate, not verified accuracy. Token totals include successful Decisions responses only.</p>
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm tabular-nums">
         <caption className="sr-only">Original recognition answers</caption>
@@ -35,12 +35,27 @@ export function AnalysisDetails({ analysis }: { analysis: AnalysisResult }) {
       </table>
     </div>
     <div className="mt-5 space-y-3">
+      <Disclosure title="Images sent to Decisions">
+        <div className="space-y-6">{segmentation.crops.map((crop, index) => <div key={crop.id}>
+          <p className="mb-3 text-sm font-semibold">Die {index + 1}</p>
+          <div className="grid grid-cols-2 gap-3">
+            <figure>
+              <img src={crop.imageUrl} alt={`Isolated image sent for die ${index + 1}`} className="aspect-square w-full rounded-xl border border-stone-100 object-contain" />
+              <figcaption className="mt-2 text-xs text-stone-500">Image 1 · Isolated die</figcaption>
+            </figure>
+            <figure>
+              <img src={crop.contextImageUrl} alt={`Context image sent for die ${index + 1}`} className="aspect-square w-full rounded-xl border border-stone-100 object-contain" />
+              <figcaption className="mt-2 text-xs text-stone-500">Image 2 · Original surroundings</figcaption>
+            </figure>
+          </div>
+        </div>)}</div>
+      </Disclosure>
       <Disclosure title="Exact instructions and questions"><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-stone-50 p-4 font-mono text-xs leading-6">{JSON.stringify({
         segmentation: { endpoint: "https://api.meta.ai/v1/responses", model: SAM_MODEL, prompt: SAM_PROMPT, mask_encoding: "one_bit" },
         eachCrop: { model: MODEL, instructions: IMAGE_INSTRUCTIONS, questions: QUESTIONS },
       }, null, 2)}</pre></Disclosure>
       <Disclosure title="Response JSON"><pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-stone-50 p-4 font-mono text-xs leading-6">{JSON.stringify({
-        segmentation: { ...segmentation, crops: segmentation.crops.map(({ imageUrl: _imageUrl, ...crop }) => crop) },
+        segmentation: { ...segmentation, crops: segmentation.crops.map(({ imageUrl: _imageUrl, contextImageUrl: _contextImageUrl, ...crop }) => crop) },
         ...diagnostics,
       }, null, 2)}</pre></Disclosure>
     </div>
